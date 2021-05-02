@@ -1,4 +1,4 @@
-package com.leory.transform.widget;
+package com.leory.transform.transform_view;
 
 import android.content.Context;
 import android.util.AttributeSet;
@@ -13,6 +13,8 @@ import android.view.View;
 public abstract class BaseTouchView extends View implements Cloneable {
     protected float m_downX;
     protected float m_downY;
+    protected float m_moveX;
+    protected float m_moveY;
 
     protected float m_downX1;
     protected float m_downY1;
@@ -52,6 +54,8 @@ public abstract class BaseTouchView extends View implements Cloneable {
                     if (event.getPointerCount() > 1) {
                         evenMove(event);
                     } else {
+                        m_moveX = event.getX();
+                        m_moveY = event.getY();
                         oddMove(event);
                     }
 
@@ -59,8 +63,6 @@ public abstract class BaseTouchView extends View implements Cloneable {
                 }
 
                 case MotionEvent.ACTION_DOWN: {
-                    //System.out.println("ACTION_DOWN");
-                    //System.out.println(event.getX() + "-" + event.getY());
                     m_downX = event.getX();
                     m_downY = event.getY();
                     oddDown(event);
@@ -69,15 +71,11 @@ public abstract class BaseTouchView extends View implements Cloneable {
 
                 case MotionEvent.ACTION_OUTSIDE:
                 case MotionEvent.ACTION_UP: {
-                    //System.out.println("ACTION_UP");
-                    //System.out.println(event.getX() + "-" + event.getY());
                     oddUp(event);
                     break;
                 }
 
                 case MotionEvent.ACTION_POINTER_DOWN: {
-                    //System.out.println("ACTION_POINTER_DOWN");
-                    //System.out.println(event.getX(event.getActionIndex()) + "-" + event.getY(event.getActionIndex()));
                     m_downX1 = event.getX(0);
                     m_downY1 = event.getY(0);
                     m_downX2 = event.getX(1);
@@ -87,8 +85,6 @@ public abstract class BaseTouchView extends View implements Cloneable {
                 }
 
                 case MotionEvent.ACTION_POINTER_UP: {
-                    //System.out.println("ACTION_POINTER_UP");
-                    //System.out.println(event.getX(event.getActionIndex()) + "-" + event.getY(event.getActionIndex()));
                     evenUp(event);
                     break;
                 }
