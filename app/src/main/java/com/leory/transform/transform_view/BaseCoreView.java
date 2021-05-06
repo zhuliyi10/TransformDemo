@@ -8,11 +8,13 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PaintFlagsDrawFilter;
 import android.graphics.Path;
+import android.graphics.PointF;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @Description: UI变换基类
@@ -27,7 +29,7 @@ public class BaseCoreView extends BaseTransformView {
     protected float[] temp_dst = new float[8];
     protected float[] temp_src = new float[8];
     protected Path temp_path = new Path();
-    protected RectF temp_react = new RectF();
+    protected RectF temp_rect = new RectF();
     protected ArrayList<ShapeEx> m_pendantArr = new ArrayList<>();//装饰物列表
     protected int m_pendantCurSel = -1; //装饰当前选中index
     protected ShapeEx m_pendant;//当前选中装饰
@@ -448,8 +450,7 @@ public class BaseCoreView extends BaseTransformView {
      */
     private boolean isSelectTarget(ShapeEx shapeEx, float x, float y) {
         if (shapeEx == null) return false;
-        temp_react = getShapeRect(shapeEx, ShapeRectType.CLING);
-        if (temp_react != null && temp_react.contains(x, y)) {
+        if (isContain(shapeEx, x, y)) {
             return true;
         }
         return false;
@@ -457,13 +458,40 @@ public class BaseCoreView extends BaseTransformView {
 
     private boolean isSelectButton(ShapeEx shapeEx, float x, float y) {
         if (shapeEx == null) return false;
-        temp_react = getShapeRect(shapeEx, ShapeRectType.CLING);
-        if (temp_react != null && temp_react.contains(x, y)) {
+        if (isContain(shapeEx, x, y)) {
             mBtnDown = shapeEx;
             return true;
         }
         return false;
     }
+
+    /**
+     * 判断点是否在多边开内
+     *
+     * @param shapeEx
+     * @param x
+     * @param y
+     * @return
+     */
+    private boolean isContain(ShapeEx shapeEx, float x, float y) {
+        boolean result = false;
+        int i = 0;
+        float[] pos = getShapePoints(shapeEx, ShapeRectType.CLING);
+        List<PointF> points = new ArrayList<>();
+        points.add(new PointF(pos[0], pos[1]));
+        points.add(new PointF(pos[2], pos[3]));
+        points.add(new PointF(pos[4], pos[5]));
+        points.add(new PointF(pos[6], pos[7]));
+        for (int j = points.size() - 1; i < points.size(); j = i++) {
+            if (points.get(i).y > y != points.get(j).y > y
+                    && x < (points.get(j).x - points.get(i).x) * (y - points.get(i).y) / (points.get(j).y - points.get(i).y) + points.get(i).x) {
+                result = !result;
+            }
+        }
+
+        return result;
+    }
+
 
     @Override
     protected void oddDown(MotionEvent event) {
