@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.PaintFlagsDrawFilter;
 import android.graphics.Path;
 import android.graphics.PointF;
 import android.graphics.RectF;
@@ -18,12 +17,18 @@ import java.util.List;
 
 /**
  * @Description: UI变换基类
+ * 功能介绍
+ * 1、画布绘制{@link #drawCanvas},包括背景{@link #drawBK}，目标图片{@link #drawTarget}，装饰物{@link #drawPendents},
+ * 选中框{@link #drawRect},按键{@link #drawButtons},中线辅助线{@link #drawCenterTipLine}
+ * 2、处理单指和双指事件
+ * 3、在显示之前，要通过{@link #setImgTargetShape}或{@link #setNullTargetShape}设置目标显示的大小，会自动适配到屏幕
+ * 4、通过{@link #addPendant}添加装饰物，通过{@link #deletePendent}删除装饰物
+ * 5、根据具体的业务设置按键如{@link #setLeftTopBtn},并在回调中处理相关的逻辑，具体参考{@link SimpleTransformView}
  * @Author: leory
  * @Time: 2021/4/30
  */
 public class BaseCoreView extends BaseTransformView {
-    protected static int BUTTON_SIZE;
-    protected PaintFlagsDrawFilter temp_filter = new PaintFlagsDrawFilter(0, Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    protected static int BUTTON_SIZE;//按键大小
     protected Paint temp_paint = new Paint();
     protected Matrix temp_matrix = new Matrix();
     protected float[] temp_dst = new float[8];
@@ -65,30 +70,36 @@ public class BaseCoreView extends BaseTransformView {
     protected void onDraw(Canvas canvas) {
         if (m_viewport == null) return;
         canvas.save();
-        //显示区域
+        drawCanvas(canvas);
+        canvas.restore();
+    }
+
+    /**
+     * 画布绘制
+     *
+     * @param canvas
+     */
+    protected void drawCanvas(Canvas canvas) {
+        //裁剪显示区域
         clipCanvas(canvas);
 
         //画背景
         drawBK(canvas);
 
-        canvas.setDrawFilter(temp_filter);
+        //绘制目标
+        drawTarget(canvas);
+
         //画装饰
-        int len = m_pendantArr.size();
-        for (int i = 0; i < len; i++) {
-            drawItem(canvas, m_pendantArr.get(i));
-        }
+        drawPendents(canvas);
 
         //画选中框
         drawRect(canvas);
 
         //显示按键
-        if (!m_isTouch) {
-            drawButtons(canvas);
-        } else {
-            drawTipLine(canvas);
-        }
+        drawButtons(canvas);
 
-        canvas.restore();
+        //画中线辅助线
+        drawCenterTipLine(canvas);
     }
 
     /**
@@ -110,7 +121,28 @@ public class BaseCoreView extends BaseTransformView {
     }
 
     /**
-     * 画装饰物
+     * 绘制目标图片
+     *
+     * @param canvas
+     */
+    protected void drawTarget(Canvas canvas) {
+        if (m_target.m_bmp != null) {//如果是空目标就不绘制
+            drawItem(canvas, m_target);
+        }
+    }
+
+    /**
+     * 画装饰物集合
+     */
+    protected void drawPendents(Canvas canvas) {
+        int len = m_pendantArr.size();
+        for (int i = 0; i < len; i++) {
+            drawItem(canvas, m_pendantArr.get(i));
+        }
+    }
+
+    /**
+     * 画shapeEx
      *
      * @param canvas
      * @param item
@@ -160,6 +192,7 @@ public class BaseCoreView extends BaseTransformView {
      * @param canvas
      */
     protected void drawButtons(Canvas canvas) {
+        if (m_isTouch) return;
         if (m_pendant != null) {
             //移动到正确位置
             temp_src = getShapePoints(m_pendant, ShapeRectType.BUTTON);
@@ -186,6 +219,14 @@ public class BaseCoreView extends BaseTransformView {
         }
     }
 
+    /**
+     * 画单个按键
+     *
+     * @param canvas
+     * @param btn
+     * @param x
+     * @param y
+     */
     private void drawBtn(Canvas canvas, ShapeEx btn, float x, float y) {
         if (btn != null) {
             btn.m_x = x - btn.m_centerX;
@@ -201,7 +242,8 @@ public class BaseCoreView extends BaseTransformView {
     /**
      * 画提示线
      */
-    private void drawTipLine(Canvas canvas) {
+    private void drawCenterTipLine(Canvas canvas) {
+        if (!m_isTouch) return;
         if (m_pendant == null) return;
         temp_paint.reset();
         temp_paint.setStrokeWidth(dpToPx(1f));
@@ -225,19 +267,49 @@ public class BaseCoreView extends BaseTransformView {
 
     }
 
+    /**
+     * 画线
+     *
+     * @param canvas
+     * @param x1
+     * @param y1
+     * @param x2
+     * @param y2
+     * @param p
+     */
     private void drawLine(Canvas canvas, float x1, float y1, float x2, float y2, Paint p) {
-        canvas.save();
         canvas.drawLine(x1, y1, x2, y2, p);
-        canvas.restore();
     }
 
     /**
-     * 更新目标视图大小
+     * 设置图片目标，并生成显示的视图，此方法用于需要显示原图片
+     *
+     * @param bmp
      */
-    public void updateTargetShape(int w, int h) {
+    public void setImgTargetShape(Bitmap bmp) {
+        if (bmp == null) return;
+        setTargetShape(bmp.getWidth(), bmp.getHeight(), bmp);
+    }
+
+    /**
+     * 设置空目标，并生成显示的视图，此方法用于不用显示原图片的控件
+     */
+    public void setNullTargetShape(int w, int h) {
+        setTargetShape(w, h, null);
+    }
+
+    /**
+     * 设置目标shape，并生成显示的视图
+     *
+     * @param w   目标的宽
+     * @param h   目标的高
+     * @param bmp 目标的bitmap
+     */
+    private void setTargetShape(int w, int h, Bitmap bmp) {
         m_target = new ShapeEx();
         m_target.m_w = w;
         m_target.m_h = h;
+        m_target.m_bmp = bmp;
         m_target.m_centerX = m_target.m_w / 2;
         m_target.m_centerY = m_target.m_h / 2;
         m_target.m_x = m_origin.m_centerX - m_target.m_centerX;
@@ -257,6 +329,15 @@ public class BaseCoreView extends BaseTransformView {
     }
 
     /**
+     * 获取当前装饰物
+     *
+     * @return
+     */
+    public ShapeEx getCurPendent() {
+        return m_pendant;
+    }
+
+    /**
      * 添加装饰物
      *
      * @param item
@@ -268,6 +349,56 @@ public class BaseCoreView extends BaseTransformView {
         index = m_pendantArr.size() - 1;
         setSelPendant(index);
         return index;
+    }
+
+    /**
+     * 删除当前装饰物
+     *
+     * @return
+     */
+    public int deleteCurPendent() {
+        int index = -1;
+        if (m_pendant != null) {
+            m_pendantArr.remove(m_pendant);
+            index = m_pendantCurSel;
+            setSelPendant(index);
+        }
+        return index;
+    }
+
+    /**
+     * 删除删除装饰物
+     *
+     * @param item
+     * @return
+     */
+    public int deletePendent(ShapeEx item) {
+        int index = -1;
+        if (item == null) {
+            return index;
+        }
+        for (int i = 0; i < m_pendantArr.size(); i++) {
+            ShapeEx temp = m_pendantArr.get(i);
+            if (item == temp) {
+                index = i;
+                deletePendentByIndex(index);
+                break;
+            }
+        }
+
+        return index;
+    }
+
+    /**
+     * 通过index删除装饰物
+     *
+     * @param index
+     * @return
+     */
+    public ShapeEx deletePendentByIndex(int index) {
+        if (index < 0 || index >= m_pendantArr.size()) return null;
+        return m_pendantArr.remove(index);
+
     }
 
     /**
@@ -356,7 +487,7 @@ public class BaseCoreView extends BaseTransformView {
      * @param item
      * @return
      */
-    private float[] getShapePoints(ShapeEx item, ShapeRectType type) {
+    protected float[] getShapePoints(ShapeEx item, ShapeRectType type) {
         float[] out = new float[8];
         getShowMatrix(item.m_matrix, item);
         temp_src[0] = 0;//左上点
@@ -394,7 +525,7 @@ public class BaseCoreView extends BaseTransformView {
      * @param type
      * @return
      */
-    private RectF getShapeRect(ShapeEx item, ShapeRectType type) {
+    protected RectF getShapeRect(ShapeEx item, ShapeRectType type) {
         RectF src = new RectF();
         RectF dest = new RectF();
         src.set(0, 0, item.m_w, item.m_h);
@@ -403,7 +534,13 @@ public class BaseCoreView extends BaseTransformView {
         return dest;
     }
 
-    private void getShowMatrix(Matrix matrix, ShapeEx item) {
+    /**
+     * 获取变换的matrix
+     *
+     * @param matrix
+     * @param item
+     */
+    protected void getShowMatrix(Matrix matrix, ShapeEx item) {
         float[] dst = {item.m_x + item.m_centerX, item.m_y + item.m_centerY};
         matrix.reset();
         if (item.m_flip == ShapeEx.Flip.VERTICAL) {
@@ -456,6 +593,14 @@ public class BaseCoreView extends BaseTransformView {
         return false;
     }
 
+    /**
+     * 判断 x,y是否在按键所在的矩形内
+     *
+     * @param shapeEx
+     * @param x
+     * @param y
+     * @return
+     */
     private boolean isSelectButton(ShapeEx shapeEx, float x, float y) {
         if (shapeEx == null) return false;
         if (isContain(shapeEx, x, y)) {

@@ -19,7 +19,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mCoreView = findViewById(R.id.core_view);
         mCoreView.post(() -> {
-            mCoreView.updateTargetShape(100, 100);
+            mCoreView.setNullTargetShape(100,100);
+//            mCoreView.setImgTargetShape(BitmapFactory.decodeResource(getResources(), R.mipmap.lindan));
             addPendant();
         });
 

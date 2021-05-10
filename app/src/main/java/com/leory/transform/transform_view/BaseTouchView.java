@@ -21,10 +21,10 @@ public abstract class BaseTouchView extends View implements Cloneable {
     protected float m_downX2;
     protected float m_downY2;
 
-    protected float m_gammaX; //移动
-    protected float m_gammaY;
+    protected float m_gammaX; //记录移动的初始坐标x
+    protected float m_gammaY;//记录移动的初始坐标x
 
-    protected boolean m_uiEnabled;
+    private boolean m_uiEnabled;
 
 
     public BaseTouchView(Context context) {

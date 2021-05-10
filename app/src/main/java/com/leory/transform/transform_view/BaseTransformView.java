@@ -373,6 +373,9 @@ public abstract class BaseTransformView extends BaseTouchView {
         return (float) Math.sqrt(dx * dx + dy * dy);
     }
 
+    /**
+     * 触感震动
+     */
     private void vibrate() {
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
     }
