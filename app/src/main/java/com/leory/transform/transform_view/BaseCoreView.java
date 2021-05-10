@@ -24,6 +24,7 @@ import java.util.List;
  * 3、在显示之前，要通过{@link #setImgTargetShape}或{@link #setNullTargetShape}设置目标显示的大小，会自动适配到屏幕
  * 4、通过{@link #addPendant}添加装饰物，通过{@link #deletePendent}删除装饰物
  * 5、根据具体的业务设置按键如{@link #setLeftTopBtn},并在回调中处理相关的逻辑，具体参考{@link SimpleTransformView}
+ * 6、获取输出的bitmap{@link #getOutputBitmap}
  * @Author: leory
  * @Time: 2021/4/30
  */
@@ -149,11 +150,8 @@ public class BaseCoreView extends BaseTransformView {
      */
     protected void drawItem(Canvas canvas, ShapeEx item) {
         if (item != null && item.m_bmp != null) {
-            temp_paint.reset();
-            temp_paint.setAntiAlias(true);
-            temp_paint.setFilterBitmap(true);
             getShowMatrix(temp_matrix, item);
-            canvas.drawBitmap(item.m_bmp, temp_matrix, temp_paint);
+            canvas.drawBitmap(item.m_bmp, temp_matrix, null);
         }
     }
 
@@ -425,6 +423,31 @@ public class BaseCoreView extends BaseTransformView {
     }
 
     /**
+     * 如果输出的target是图片，则调用此方法前先设置m_target.m_bmp为高清原图，保存完之前改回之前的图片
+     * 获取输出bitmap
+     */
+    public Bitmap getOutputBitmap() {
+        int outW = m_viewport.m_w;
+        int outH = m_viewport.m_h;
+        float scale = 1f;
+        if (m_target.m_bmp != null) {//是图片,则导出改成图片的宽高
+            outW = m_target.m_bmp.getWidth();
+            outH = m_target.m_bmp.getHeight();
+            scale = 1f * outW / m_viewport.m_w;
+        }
+        Bitmap outBmp = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(outBmp);
+        if (m_target.m_bmp != null) {
+            canvas.drawBitmap(m_target.m_bmp, 0, 0, null);
+        }
+        canvas.scale(scale, scale);
+        canvas.translate(-m_viewport.m_x, -m_viewport.m_y);
+        //画装饰
+        drawPendents(canvas);
+        return outBmp;
+    }
+
+    /**
      * 设置左上按键
      *
      * @param btnRes
@@ -450,6 +473,7 @@ public class BaseCoreView extends BaseTransformView {
     public void setRightBottomBtn(int btnRes, ButtonListener listener) {
         mBtnRightBottom = getButtonShape(btnRes, listener);
     }
+
 
     /**
      * 设置左下按键
