@@ -23,6 +23,8 @@ public abstract class BaseTransformView extends BaseTouchView {
     protected float m_oldDegree;
     protected float m_oldScaleX;
     protected float m_oldScaleY;
+    protected float m_gammaX; //记录移动的初始坐标x
+    protected float m_gammaY;//记录移动的初始坐标x
 
     public BaseTransformView(Context context) {
         this(context, null);

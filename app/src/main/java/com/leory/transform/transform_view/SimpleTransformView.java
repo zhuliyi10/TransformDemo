@@ -33,7 +33,9 @@ public class SimpleTransformView extends BaseCoreView {
         super.init();
 
         setLeftTopBtn(R.mipmap.ic_pendant_del, action -> {
-            deleteCurPendent();
+            if (action == MotionEvent.ACTION_UP) {
+                deleteCurPendent();
+            }
         });
         setRightBottomBtn(R.mipmap.ic_pendant_scale, action -> {
             if (action == MotionEvent.ACTION_DOWN) {
