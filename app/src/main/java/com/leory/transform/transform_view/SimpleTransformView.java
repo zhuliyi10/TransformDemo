@@ -31,21 +31,23 @@ public class SimpleTransformView extends BaseCoreView {
     @Override
     protected void init() {
         super.init();
+        setRightBottomBtn(R.mipmap.ic_pendant_scale);
+    }
 
-        setLeftTopBtn(R.mipmap.ic_pendant_del, action -> {
-            if (action == MotionEvent.ACTION_UP) {
-                deleteCurPendent();
-            }
-        });
-        setRightBottomBtn(R.mipmap.ic_pendant_scale, action -> {
+    @Override
+    protected void onButtonAction(ShapeEx shapeBtn, int action) {
+        if (shapeBtn == mBtnRightBottom) {//缩放
             if (action == MotionEvent.ACTION_DOWN) {
                 m_pendantCX = m_pendant.m_centerX + m_pendant.m_x;
                 m_pendantCY = m_pendant.m_centerY + m_pendant.m_y;
                 Init_RZ_Data(m_pendant, m_pendantCX, m_pendantCY, m_downX, m_downY);
             } else if (action == MotionEvent.ACTION_MOVE) {
                 Run_RZ(m_pendant, m_pendantCX, m_pendantCY, m_moveX, m_moveY);
+                if (mCallBack != null) {
+                    mCallBack.onPendantMove(MotionEvent.ACTION_MOVE, false);
+                }
             }
-        });
+        }
     }
 
 

@@ -45,7 +45,9 @@ public class ShapeEx implements Cloneable {
         }
     }
 
-
+    public float getScale() {
+        return m_scaleX;
+    }
     @NonNull
     @Override
     protected ShapeEx clone() {

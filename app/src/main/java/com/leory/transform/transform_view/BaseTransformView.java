@@ -59,7 +59,7 @@ public abstract class BaseTransformView extends BaseTouchView {
      * @param width
      * @param height
      */
-    private void updateOrigin(int width, int height) {
+    protected void updateOrigin(int width, int height) {
         if (m_origin == null) {
             m_origin = new ShapeEx();
         }

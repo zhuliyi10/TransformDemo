@@ -23,8 +23,9 @@ import java.util.List;
  * 2、处理单指和双指事件
  * 3、在视图显示之前，要通过{@link #setImgTargetShape}或{@link #setNullTargetShape}设置目标显示的大小，会自动适配到屏幕
  * 4、通过{@link #addPendant}添加装饰物，通过{@link #deletePendent}删除装饰物
- * 5、根据具体的业务设置按键如{@link #setLeftTopBtn},并在回调中处理相关的逻辑，具体参考{@link SimpleTransformView}
- * 6、获取输出的bitmap{@link #getOutputBitmap}
+ * 5、根据具体的业务设置按键如{@link #setLeftTopBtn},并在回调{@link #onButtonAction}中处理相关的逻辑
+ * 6、通过调用{@link #setControlCallBack}回调事件
+ * 7、获取输出的bitmap{@link #getOutputBitmap}
  * @Author: leory
  * @Time: 2021/4/30
  */
@@ -35,18 +36,20 @@ public class BaseCoreView extends BaseTransformView {
     protected float[] temp_src = new float[8];
     protected Path temp_path = new Path();
     protected RectF temp_rect = new RectF();
-    protected ArrayList<ShapeEx> m_pendantArr = new ArrayList<>();//装饰物列表
+    protected List<ShapeEx> m_pendantArr = new ArrayList<>();//装饰物列表
     protected int m_pendantCurSel = -1; //装饰当前选中index
     protected ShapeEx m_pendant;//当前选中装饰
     protected boolean m_isTouch = false;
     private boolean m_hasMoved = false;
-    private int m_bkColor = 0xff000000;
-    private ShapeEx mBtnLeftTop;//左上按键
-    private ShapeEx mBtnRightTop;//右上按键
-    private ShapeEx mBtnRightBottom;//右下按键
-    private ShapeEx mBtnLeftBottom;//左下按键
-    private ShapeEx mBtnDown;//down事件对应的按键
+    private Integer mBgColor = null;
+    protected ShapeEx mBtnLeftTop;//左上按键
+    protected ShapeEx mBtnRightTop;//右上按键
+    protected ShapeEx mBtnRightBottom;//右下按键
+    protected ShapeEx mBtnLeftBottom;//左下按键
+    protected ShapeEx mBtnDown;//down事件对应的按键
     protected ControlCallBack mCallBack;//回调事件
+    protected float m_pendantCX;//选中装饰物中心点X坐标
+    protected float m_pendantCY;//选中装饰物中心点Y坐标
 
     public BaseCoreView(Context context) {
         this(context, null);
@@ -70,9 +73,7 @@ public class BaseCoreView extends BaseTransformView {
     @Override
     protected void onDraw(Canvas canvas) {
         if (m_viewport == null) return;
-        canvas.save();
         drawCanvas(canvas);
-        canvas.restore();
     }
 
     /**
@@ -112,7 +113,9 @@ public class BaseCoreView extends BaseTransformView {
      * @param canvas
      */
     protected void drawBK(Canvas canvas) {
-        canvas.drawColor(m_bkColor);
+        if (mBgColor != null) {
+            canvas.drawColor(mBgColor);
+        }
     }
 
     /**
@@ -135,6 +138,7 @@ public class BaseCoreView extends BaseTransformView {
             drawItem(canvas, m_pendantArr.get(i));
         }
     }
+
 
     /**
      * 画shapeEx
@@ -201,7 +205,6 @@ public class BaseCoreView extends BaseTransformView {
      */
     protected void drawButtons(Canvas canvas) {
         if (m_isTouch) return;
-
         //移动到正确位置
         temp_src = getShapePoints(m_pendant, ShapeRectType.BUTTON);
         if (m_pendant.m_flip == ShapeEx.Flip.HORIZONTAL) {
@@ -235,15 +238,18 @@ public class BaseCoreView extends BaseTransformView {
      * @param x
      * @param y
      */
-    private void drawBtn(Canvas canvas, ShapeEx btn, float x, float y) {
+    protected void drawBtn(Canvas canvas, ShapeEx btn, float x, float y) {
         if (btn != null) {
-            btn.m_x = x - btn.m_centerX;
-            btn.m_y = y - btn.m_centerY;
-            temp_paint.reset();
-            temp_paint.setAntiAlias(true);
-            temp_paint.setFilterBitmap(true);
-            getShowMatrix(btn.m_matrix, btn);
-            canvas.drawBitmap(btn.m_bmp, btn.m_matrix, temp_paint);
+            boolean isShow = (boolean) btn.m_ex;
+            if (isShow) {
+                btn.m_x = x - btn.m_centerX;
+                btn.m_y = y - btn.m_centerY;
+                temp_paint.reset();
+                temp_paint.setAntiAlias(true);
+                temp_paint.setFilterBitmap(true);
+                getShowMatrix(btn.m_matrix, btn);
+                canvas.drawBitmap(btn.m_bmp, btn.m_matrix, temp_paint);
+            }
         }
     }
 
@@ -303,6 +309,7 @@ public class BaseCoreView extends BaseTransformView {
      */
     public void setNullTargetShape(int w, int h) {
         setTargetShape(w, h, null);
+        updateUI();
     }
 
     /**
@@ -313,26 +320,64 @@ public class BaseCoreView extends BaseTransformView {
      * @param bmp 目标的bitmap
      */
     private void setTargetShape(int w, int h, Bitmap bmp) {
+        if (m_origin == null) {
+            updateOrigin(getMeasuredWidth(), getMeasuredHeight());
+        }
+        ShapeEx lastViewPort = null;
+        if (m_viewport != null) {
+            lastViewPort = (ShapeEx) m_viewport.clone();
+        }
         m_target = new ShapeEx();
         m_target.m_w = w;
         m_target.m_h = h;
         m_target.m_bmp = bmp;
-        m_target.m_centerX = m_target.m_w / 2;
-        m_target.m_centerY = m_target.m_h / 2;
+        m_target.m_centerX = m_target.m_w / 2f;
+        m_target.m_centerY = m_target.m_h / 2f;
         m_target.m_x = m_origin.m_centerX - m_target.m_centerX;
         m_target.m_y = m_origin.m_centerY - m_target.m_centerY;
-        float scale1 = (float) m_origin.m_w / (float) m_target.m_w;
-        float scale2 = (float) m_origin.m_h / (float) m_target.m_h;
+        float scale1 = 1f * m_origin.m_w / m_target.m_w;
+        float scale2 = 1f * m_origin.m_h / m_target.m_h;
         m_target.m_scaleY = m_target.m_scaleX = (scale1 > scale2) ? scale2 : scale1;
 
-        m_viewport = new ShapeEx();
-        m_viewport.m_w = (int) (m_target.m_w * m_target.m_scaleX);
-        m_viewport.m_h = (int) (m_target.m_h * m_target.m_scaleY);
-        m_viewport.m_centerX = m_viewport.m_w / 2;
-        m_viewport.m_centerY = m_viewport.m_h / 2;
+        if (m_viewport == null) {
+            m_viewport = new ShapeEx();
+        }
+        m_viewport.m_w = (int) (m_target.m_w * m_target.m_scaleX + 0.5f);
+        m_viewport.m_h = (int) (m_target.m_h * m_target.m_scaleY + 0.5f);
+        m_viewport.m_centerX = m_viewport.m_w / 2f;
+        m_viewport.m_centerY = m_viewport.m_h / 2f;
         m_viewport.m_x = m_origin.m_centerX - m_viewport.m_centerX;
         m_viewport.m_y = m_origin.m_centerY - m_viewport.m_centerY;
-        updateUI();
+        onTargetShapeChange(lastViewPort, m_viewport);
+    }
+
+    /**
+     * viewPort视图变化时调用，保证装饰物所在viewPort相对位置和大小的比例不变
+     *
+     * @param lastViewPort
+     * @param nowViewPort
+     */
+    private void onTargetShapeChange(ShapeEx lastViewPort, ShapeEx nowViewPort) {
+        if (lastViewPort == null || nowViewPort == null) return;
+        for (ShapeEx item : m_pendantArr) {
+            float centerX = (item.m_x + item.m_centerX - lastViewPort.m_x) / lastViewPort.m_w;
+            float centerY = (item.m_y + item.m_centerY - lastViewPort.m_y) / lastViewPort.m_h;
+            item.m_x = centerX * nowViewPort.m_w + nowViewPort.m_x - item.m_centerX;
+            item.m_y = centerY * nowViewPort.m_h + nowViewPort.m_y - item.m_centerY;
+        }
+    }
+
+    /**
+     * 获取全部覆盖物
+     *
+     * @return
+     */
+    public List<ShapeEx> getAllPendants() {
+        return m_pendantArr;
+    }
+
+    public void setAllPendant(List<ShapeEx> pendants) {
+        m_pendantArr = pendants;
     }
 
     /**
@@ -356,15 +401,46 @@ public class BaseCoreView extends BaseTransformView {
     }
 
     /**
+     * 获取 Pendant的index
+     *
+     * @param item
+     * @return
+     */
+    public int getPendantIndex(ShapeEx item) {
+        if (item == null) return -1;
+        for (int i = 0; i < m_pendantArr.size(); i++) {
+            if (item == m_pendantArr.get(i)) return i;
+        }
+        return -1;
+    }
+
+    /**
+     * 是否是最底层
+     *
+     * @return
+     */
+    public boolean isBottomMost(ShapeEx item) {
+        return getPendantIndex(item) == 0;
+    }
+
+    /**
+     * 是否是最顶层
+     *
+     * @return
+     */
+    public boolean isTopMost(ShapeEx item) {
+        return getPendantIndex(item) == getAllPendants().size() - 1;
+    }
+
+    /**
      * 添加装饰物
      *
      * @param item
      * @return
      */
     public int addPendant(ShapeEx item) {
-        int index = -1;
         m_pendantArr.add(item);
-        index = m_pendantArr.size() - 1;
+        int index = m_pendantArr.size() - 1;
         setSelPendant(index);
         return index;
     }
@@ -375,7 +451,6 @@ public class BaseCoreView extends BaseTransformView {
      * @return
      */
     public void deleteCurPendent() {
-        int index = -1;
         if (m_pendant != null) {
             m_pendantArr.remove(m_pendant);
             setSelPendant(-1);
@@ -413,8 +488,44 @@ public class BaseCoreView extends BaseTransformView {
      */
     public ShapeEx deletePendentByIndex(int index) {
         if (index < 0 || index >= m_pendantArr.size()) return null;
-        return m_pendantArr.remove(index);
+        ShapeEx shapeEx = m_pendantArr.remove(index);
+        setSelPendant(-1);
+        return shapeEx;
 
+    }
+
+    /**
+     * 清空装饰物
+     */
+    public void deleteAllPendant() {
+        m_pendantArr.clear();
+        setSelPendant(-1);
+    }
+
+    /**
+     * 上一层
+     */
+    public void lastLayer() {
+        if (m_pendant != null && m_pendantCurSel < getAllPendants().size() - 1) {
+            if (getAllPendants().remove(m_pendant)) {
+                m_pendantCurSel++;
+                getAllPendants().add(m_pendantCurSel, m_pendant);
+                setSelPendant(m_pendantCurSel);
+            }
+        }
+    }
+
+    /**
+     * 下一层
+     */
+    public void nextLayer() {
+        if (m_pendant != null && m_pendantCurSel > 0) {
+            if (getAllPendants().remove(m_pendant)) {
+                m_pendantCurSel--;
+                getAllPendants().add(m_pendantCurSel, m_pendant);
+                setSelPendant(m_pendantCurSel);
+            }
+        }
     }
 
     /**
@@ -434,6 +545,17 @@ public class BaseCoreView extends BaseTransformView {
     }
 
     /**
+     * 获取目标最底部Y坐标
+     *
+     * @param shapeEx
+     * @return
+     */
+    public float getBottomY(ShapeEx shapeEx) {
+        temp_dst = getShapePoints(shapeEx, ShapeRectType.RECT_SELECT);
+        return Math.max(Math.max(temp_dst[1], temp_dst[3]), Math.max(temp_dst[5], temp_dst[7]));
+    }
+
+    /**
      * 更新UI
      */
     public void updateUI() {
@@ -441,18 +563,13 @@ public class BaseCoreView extends BaseTransformView {
     }
 
     /**
-     * 如果输出的target是图片，则调用此方法前先设置m_target.m_bmp为高清原图，保存完之前改回之前的图片
+     * 调用之前如需改变target则调用{@link #setNullTargetShape}或{@link #setImgTargetShape}
      * 获取输出bitmap
      */
     public Bitmap getOutputBitmap() {
-        int outW = m_viewport.m_w;
-        int outH = m_viewport.m_h;
-        float scale = 1f;
-        if (m_target.m_bmp != null) {//是图片,则导出改成图片的宽高
-            outW = m_target.m_bmp.getWidth();
-            outH = m_target.m_bmp.getHeight();
-            scale = 1f * outW / m_viewport.m_w;
-        }
+        int outW = m_target.m_w;
+        int outH = m_target.m_h;
+        float scale = 1f * outW / m_viewport.m_w;
         Bitmap outBmp = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(outBmp);
         if (m_target.m_bmp != null) {
@@ -479,8 +596,8 @@ public class BaseCoreView extends BaseTransformView {
      *
      * @param btnRes
      */
-    public void setLeftTopBtn(int btnRes, ButtonListener listener) {
-        mBtnLeftTop = getButtonShape(btnRes, listener);
+    public void setLeftTopBtn(int btnRes) {
+        mBtnLeftTop = getButtonShape(btnRes);
     }
 
     /**
@@ -488,8 +605,8 @@ public class BaseCoreView extends BaseTransformView {
      *
      * @param btnRes
      */
-    public void setRightTopBtn(int btnRes, ButtonListener listener) {
-        mBtnRightTop = getButtonShape(btnRes, listener);
+    public void setRightTopBtn(int btnRes) {
+        mBtnRightTop = getButtonShape(btnRes);
     }
 
     /**
@@ -497,8 +614,8 @@ public class BaseCoreView extends BaseTransformView {
      *
      * @param btnRes
      */
-    public void setRightBottomBtn(int btnRes, ButtonListener listener) {
-        mBtnRightBottom = getButtonShape(btnRes, listener);
+    public void setRightBottomBtn(int btnRes) {
+        mBtnRightBottom = getButtonShape(btnRes);
     }
 
 
@@ -507,8 +624,8 @@ public class BaseCoreView extends BaseTransformView {
      *
      * @param btnRes
      */
-    public void setLeftBottomBtn(int btnRes, ButtonListener listener) {
-        mBtnLeftBottom = getButtonShape(btnRes, listener);
+    public void setLeftBottomBtn(int btnRes) {
+        mBtnLeftBottom = getButtonShape(btnRes);
     }
 
     /**
@@ -517,19 +634,26 @@ public class BaseCoreView extends BaseTransformView {
      * @param res
      * @return
      */
-    protected ShapeEx getButtonShape(int res, ButtonListener listener) {
+    protected ShapeEx getButtonShape(int res) {
         ShapeEx shape = null;
         if (res != 0) {
             shape = new ShapeEx();
             Bitmap bmp = BitmapFactory.decodeResource(getResources(), res);
             shape.m_bmp = bmp;
+            BUTTON_SIZE = bmp.getHeight();
             shape.m_w = BUTTON_SIZE;
             shape.m_h = BUTTON_SIZE;
             shape.m_centerX = (float) shape.m_w / 2f;
             shape.m_centerY = (float) shape.m_h / 2f;
-            shape.m_ex = listener;
+            shape.m_ex = true;//显示
         }
         return shape;
+    }
+
+    protected void setButtonShow(ShapeEx shapeBtn, boolean isShow) {
+        if (shapeBtn != null) {
+            shapeBtn.m_ex = isShow;
+        }
     }
 
     /**
@@ -538,7 +662,7 @@ public class BaseCoreView extends BaseTransformView {
      * @param item
      * @return
      */
-    protected float[] getShapePoints(ShapeEx item, ShapeRectType type) {
+    public float[] getShapePoints(ShapeEx item, ShapeRectType type) {
         float[] out = new float[8];
         getShowMatrix(item.m_matrix, item);
         temp_src[0] = 0;//左上点
@@ -555,7 +679,7 @@ public class BaseCoreView extends BaseTransformView {
             if (type == ShapeRectType.BUTTON) {
                 DEF_GAP += dpToPx(4);
             }
-            DEF_GAP = DEF_GAP / item.m_scaleX;
+            DEF_GAP = DEF_GAP / item.getScale();
             temp_src[0] = -DEF_GAP;//左上点
             temp_src[1] = -DEF_GAP;
             temp_src[2] = item.m_w + DEF_GAP;//右上点
@@ -569,21 +693,6 @@ public class BaseCoreView extends BaseTransformView {
         return out;
     }
 
-    /**
-     * 获取矩形的rect
-     *
-     * @param item
-     * @param type
-     * @return
-     */
-    protected RectF getShapeRect(ShapeEx item, ShapeRectType type) {
-        RectF src = new RectF();
-        RectF dest = new RectF();
-        src.set(0, 0, item.m_w, item.m_h);
-        getShowMatrix(item.m_matrix, item);
-        item.m_matrix.mapRect(dest, src);
-        return dest;
-    }
 
     /**
      * 获取变换的matrix
@@ -591,7 +700,7 @@ public class BaseCoreView extends BaseTransformView {
      * @param matrix
      * @param item
      */
-    protected void getShowMatrix(Matrix matrix, ShapeEx item) {
+    public void getShowMatrix(Matrix matrix, ShapeEx item) {
         float[] dst = {item.m_x + item.m_centerX, item.m_y + item.m_centerY};
         matrix.reset();
         if (item.m_flip == ShapeEx.Flip.VERTICAL) {
@@ -603,7 +712,7 @@ public class BaseCoreView extends BaseTransformView {
         }
 
         matrix.postTranslate(dst[0] - item.m_centerX, dst[1] - item.m_centerY);
-        matrix.postScale(item.m_scaleX, item.m_scaleY, dst[0], dst[1]);
+        matrix.postScale(item.getScale(), item.getScale(), dst[0], dst[1]);
         matrix.postRotate(item.m_degree, dst[0], dst[1]);
     }
 
@@ -614,15 +723,23 @@ public class BaseCoreView extends BaseTransformView {
      * @param y
      * @return
      */
-    private int getSelectIndex(float x, float y) {
+    protected int getSelectIndex(float x, float y) {
         int index = -1;
-        ShapeEx item;
+        List<Integer> selectList = new ArrayList<>();//选中的列表
         int len = m_pendantArr.size();
         for (int i = len - 1; i >= 0; i--) {
-            item = m_pendantArr.get(i);
+            ShapeEx item = m_pendantArr.get(i);
             if (isSelectTarget(item, x, y)) {
-                index = i;
-                break;
+                selectList.add(i);
+            }
+        }
+        if (selectList.size() > 0) {
+            index = selectList.get(0);//默认第一个选中
+            for (int i = 0; i < selectList.size() - 1; i++) {
+                if (selectList.get(i) == m_pendantCurSel) {
+                    index = selectList.get(i + 1);//当前选中的下一个选中
+                    break;
+                }
             }
         }
         return index;
@@ -636,7 +753,7 @@ public class BaseCoreView extends BaseTransformView {
      * @param y
      * @return
      */
-    private boolean isSelectTarget(ShapeEx shapeEx, float x, float y) {
+    protected boolean isSelectTarget(ShapeEx shapeEx, float x, float y) {
         if (shapeEx == null) return false;
         if (isContain(shapeEx, x, y)) {
             return true;
@@ -654,7 +771,8 @@ public class BaseCoreView extends BaseTransformView {
      */
     private boolean isSelectButton(ShapeEx shapeEx, float x, float y) {
         if (shapeEx == null) return false;
-        if (isContain(shapeEx, x, y)) {
+        boolean isShow = (boolean) shapeEx.m_ex;
+        if (isShow && isContain(shapeEx, x, y)) {
             mBtnDown = shapeEx;
             return true;
         }
@@ -688,6 +806,24 @@ public class BaseCoreView extends BaseTransformView {
         return result;
     }
 
+    /**
+     * 选中时回调
+     *
+     * @param isNewSelect
+     */
+    protected void onPendantSelect(boolean isNewSelect) {
+
+    }
+
+    /**
+     * 按键触摸时回调
+     *
+     * @param shapeBtn
+     * @param action
+     */
+    protected void onButtonAction(ShapeEx shapeBtn, int action) {
+
+    }
 
     @Override
     protected void oddDown(MotionEvent event) {
@@ -696,19 +832,19 @@ public class BaseCoreView extends BaseTransformView {
         mBtnDown = null;
         if (m_pendant != null) {
             if (isSelectButton(mBtnLeftTop, m_downX, m_downY)) {
-                ((ButtonListener) mBtnLeftTop.m_ex).onButtonAction(MotionEvent.ACTION_DOWN);
+                onButtonAction(mBtnLeftTop, MotionEvent.ACTION_DOWN);
                 return;
             }
             if (isSelectButton(mBtnRightTop, m_downX, m_downY)) {
-                ((ButtonListener) mBtnRightTop.m_ex).onButtonAction(MotionEvent.ACTION_DOWN);
+                onButtonAction(mBtnRightTop, MotionEvent.ACTION_DOWN);
                 return;
             }
             if (isSelectButton(mBtnRightBottom, m_downX, m_downY)) {
-                ((ButtonListener) mBtnRightBottom.m_ex).onButtonAction(MotionEvent.ACTION_DOWN);
+                onButtonAction(mBtnRightBottom, MotionEvent.ACTION_DOWN);
                 return;
             }
             if (isSelectButton(mBtnLeftBottom, m_downX, m_downY)) {
-                ((ButtonListener) mBtnLeftBottom.m_ex).onButtonAction(MotionEvent.ACTION_DOWN);
+                onButtonAction(mBtnLeftBottom, MotionEvent.ACTION_DOWN);
                 return;
             }
             Init_M_Data(m_pendant, m_downX, m_downY);
@@ -727,9 +863,13 @@ public class BaseCoreView extends BaseTransformView {
         }
         if (m_isTouch && m_hasMoved && m_pendant != null) {
             if (mBtnDown != null) {//按下了按键
-                ((ButtonListener) mBtnDown.m_ex).onButtonAction(MotionEvent.ACTION_MOVE);
+                onButtonAction(mBtnDown, MotionEvent.ACTION_MOVE);
             } else {
                 Run_M(m_pendant, m_moveX, m_moveY);
+                if (mCallBack != null) {
+                    mCallBack.onPendantMove(MotionEvent.ACTION_MOVE, event.getPointerCount() == 1);
+                }
+
             }
             //更新界面
             updateUI();
@@ -738,30 +878,37 @@ public class BaseCoreView extends BaseTransformView {
 
     @Override
     protected void oddUp(MotionEvent event) {
+        if (!m_isTouch) return;
         m_isTouch = false;
         if (!m_hasMoved) {
             if (mBtnDown != null) {
-                ((ButtonListener) mBtnDown.m_ex).onButtonAction(MotionEvent.ACTION_UP);
+                onButtonAction(mBtnDown, MotionEvent.ACTION_UP);
+                updateUI();
                 return;
             }
+            int lastIndex = m_pendantCurSel;
             int index = getSelectIndex(m_downX, m_downY);
+            boolean isNewSelect = index != m_pendantCurSel;//上一次是否选中
             if (index >= 0) {
                 m_pendant = m_pendantArr.get(index);
                 m_pendantCurSel = index;
-                if (mCallBack != null) {
-                    mCallBack.onPendantSelected(m_pendant, m_pendantCurSel);
-                }
+                onPendantSelect(isNewSelect);
             } else {
                 if (m_pendantCurSel >= 0) {
                     m_pendantCurSel = -1;
                     m_pendant = null;
-                    if (mCallBack != null) {
-                        mCallBack.onPendantSelected(null, -1);
-                    }
+                }
+            }
+            if (mCallBack != null) {
+                mCallBack.onPendantSelected(m_pendantCurSel, lastIndex);
+            }
+        } else {
+            if (m_pendant != null) {
+                if (mCallBack != null) {
+                    mCallBack.onPendantMove(MotionEvent.ACTION_UP, event.getPointerCount() == 1);
                 }
             }
         }
-
         //更新界面
         updateUI();
     }
@@ -780,6 +927,9 @@ public class BaseCoreView extends BaseTransformView {
         if (m_pendant != null) {
             Run_MRZ(m_pendant, event.getX(0), event.getY(0), event.getX(1), event.getY(1));
             updateUI();
+            if (mCallBack != null) {
+                mCallBack.onPendantMove(MotionEvent.ACTION_MOVE, event.getPointerCount() == 1);
+            }
         }
     }
 
@@ -795,11 +945,9 @@ public class BaseCoreView extends BaseTransformView {
         BUTTON//按键
     }
 
-    public interface ButtonListener {
-        void onButtonAction(int action);
-    }
-
     public interface ControlCallBack {
-        void onPendantSelected(ShapeEx item, int index);//选中回调
+        void onPendantSelected(int index, int lastIndex);//选中回调
+
+        void onPendantMove(int action, boolean isMove);
     }
 }
